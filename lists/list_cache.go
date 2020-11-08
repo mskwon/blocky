@@ -15,6 +15,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+	"github.com/smhanov/dawg"
 )
 
 const (
@@ -48,7 +49,7 @@ type Matcher interface {
 }
 
 type ListCache struct {
-	groupCaches map[string][]string
+	groupCaches map[string]dawg.Finder
 	lock        sync.RWMutex
 
 	groupToLinks  map[string][]string
@@ -77,8 +78,8 @@ func (b *ListCache) Configuration() (result []string) {
 	var total int
 
 	for group, cache := range b.groupCaches {
-		result = append(result, fmt.Sprintf("  %s: %d entries", group, len(cache)))
-		total += len(cache)
+		result = append(result, fmt.Sprintf("  %s: %d entries", group, cache.NumAdded()))
+		total += cache.NumAdded()
 	}
 
 	result = append(result, fmt.Sprintf("  TOTAL: %d entries", total))
@@ -87,7 +88,7 @@ func (b *ListCache) Configuration() (result []string) {
 }
 
 func NewListCache(t ListCacheType, groupToLinks map[string][]string, refreshPeriod int) *ListCache {
-	groupCaches := make(map[string][]string)
+	groupCaches := make(map[string]dawg.Finder)
 
 	p := time.Duration(refreshPeriod) * time.Minute
 	if refreshPeriod == 0 {
@@ -138,8 +139,8 @@ func logger() *logrus.Entry {
 }
 
 // downloads and reads files with domain names and creates cache for them
-func createCacheForGroup(links []string) []string {
-	cache := make([]string, 0)
+func createCacheForGroup(links []string) dawg.Finder {
+	entries := make([]string, 0)
 
 	keys := make(map[string]bool)
 
@@ -165,7 +166,7 @@ Loop:
 			for _, entry := range res {
 				if _, value := keys[entry]; !value {
 					keys[entry] = true
-					cache = append(cache, entry)
+					entries = append(entries, entry)
 				}
 			}
 		default:
@@ -174,9 +175,14 @@ Loop:
 		}
 	}
 
-	sort.Strings(cache)
+	sort.Strings(entries)
 
-	return cache
+	dawgBuilder := dawg.New()
+	for _, word := range entries {
+		dawgBuilder.Add(word)
+	}
+
+	return dawgBuilder.Finish()
 }
 
 func (b *ListCache) Match(domain string, groupsToCheck []string) (found bool, group string) {
@@ -192,13 +198,11 @@ func (b *ListCache) Match(domain string, groupsToCheck []string) (found bool, gr
 	return false, ""
 }
 
-func contains(domain string, cache []string) bool {
-	idx := sort.SearchStrings(cache, domain)
-	if idx < len(cache) {
-		return cache[idx] == strings.ToLower(domain)
+func contains(domain string, cache dawg.Finder) bool {
+	if cache == nil {
+		return false
 	}
-
-	return false
+	return cache.IndexOf(strings.ToLower(domain)) != -1
 }
 
 func (b *ListCache) refresh() {
@@ -214,12 +218,12 @@ func (b *ListCache) refresh() {
 		}
 
 		if metrics.IsEnabled() {
-			b.counter.WithLabelValues(group).Set(float64(len(b.groupCaches[group])))
+			b.counter.WithLabelValues(group).Set(float64(b.groupCaches[group].NumAdded()))
 		}
 
 		logger().WithFields(logrus.Fields{
 			"group":       group,
-			"total_count": len(b.groupCaches[group]),
+			"total_count": b.groupCaches[group].NumAdded(),
 		}).Info("group import finished")
 	}
 }

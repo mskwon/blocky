@@ -21,10 +21,12 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.7.1
 	github.com/sirupsen/logrus v1.7.0
+	github.com/smhanov/dawg v0.0.0-20201027134228-64393ae07b2f
 	github.com/spf13/cobra v0.0.7
 	github.com/stretchr/testify v1.6.1
 	github.com/swaggo/http-swagger v0.0.0-20200308142732-58ac5e232fba
-	github.com/swaggo/swag v1.6.7
+	github.com/swaggo/swag v1.6.5
+	github.com/urfave/cli/v2 v2.1.1 // indirect
 	github.com/x-cray/logrus-prefixed-formatter v0.5.2
 	golang.org/x/tools v0.0.0-20200403190813-44a64ad78b9b // indirect
 	gopkg.in/yaml.v2 v2.3.0
